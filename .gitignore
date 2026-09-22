@@ -1,0 +1,33 @@
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Large Datasets & Local Database Caches (>100MB exceeds GitHub limits)
+data/transactions.csv
+data/fraud_graph.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Node & Frontend Build
+node_modules/
+web/node_modules/
+web/dist/
+dist/
+.npm
+
+# Operating System
+.DS_Store
+Thumbs.db

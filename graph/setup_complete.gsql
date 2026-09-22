@@ -1,0 +1,155 @@
+// ==============================================================================
+// 🛡️ TigerGraph Savanna Master Setup Script (Schema + Graph + Queries)
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// STEP 1: DEFINE VERTICES
+// ------------------------------------------------------------------------------
+CREATE VERTEX Customer (
+    PRIMARY_ID customer_id STRING,
+    customer_id STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX Card (
+    PRIMARY_ID card_id STRING,
+    card_id STRING,
+    network STRING,
+    card_type STRING,
+    issuer_code INT
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX Transaction (
+    PRIMARY_ID txn_id STRING,
+    txn_id STRING,
+    ts DATETIME,
+    amt DOUBLE,
+    product_cd STRING,
+    channel STRING,
+    risk_score DOUBLE,
+    addr1 STRING,
+    addr2 STRING,
+    dist1 DOUBLE,
+    dist2 DOUBLE,
+    p_emaildomain STRING,
+    r_emaildomain STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX DeviceProfile (
+    PRIMARY_ID device_id STRING,
+    device_id STRING,
+    device_type STRING,
+    device_info STRING,
+    os STRING,
+    browser STRING,
+    screen STRING,
+    is_new_device STRING,
+    proxy_rating STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX EmailDomain (
+    PRIMARY_ID domain_name STRING,
+    domain_name STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX BillingRegion (
+    PRIMARY_ID region_code STRING,
+    region_code STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX ClosedCase (
+    PRIMARY_ID case_id STRING,
+    case_id STRING,
+    opened_at DATETIME,
+    closed_at DATETIME,
+    outcome STRING,
+    pattern STRING,
+    exposure_usd DOUBLE,
+    n_txns INT,
+    actions_taken STRING,
+    report_filed STRING,
+    analyst_notes STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+CREATE VERTEX InvestigationCase (
+    PRIMARY_ID case_id STRING,
+    case_id STRING,
+    opened_at DATETIME,
+    status STRING,
+    verdict STRING,
+    fraud_probability DOUBLE,
+    pattern STRING,
+    pattern_description STRING,
+    exposure_usd DOUBLE,
+    summary STRING,
+    sar_filed BOOL,
+    recommended_actions STRING
+) WITH STATS="OUTDEGREE_BY_EDGETYPE";
+
+// ------------------------------------------------------------------------------
+// STEP 2: DEFINE EDGES
+// ------------------------------------------------------------------------------
+CREATE DIRECTED EDGE OWNS (FROM Customer, TO Card);
+CREATE DIRECTED EDGE MADE (FROM Card, TO Transaction);
+CREATE DIRECTED EDGE FROM_DEVICE (FROM Transaction, TO DeviceProfile);
+CREATE DIRECTED EDGE PURCHASER_EMAIL (FROM Transaction, TO EmailDomain);
+CREATE DIRECTED EDGE BILLED_IN (FROM Transaction, TO BillingRegion);
+CREATE DIRECTED EDGE NEXT (FROM Transaction, TO Transaction);
+
+CREATE DIRECTED EDGE INVOLVES (FROM ClosedCase, TO Transaction);
+CREATE DIRECTED EDGE ON_CARD (FROM ClosedCase, TO Card);
+CREATE DIRECTED EDGE CONNECTED_TO (FROM ClosedCase, TO Card);
+CREATE DIRECTED EDGE CASE_DEVICE (FROM ClosedCase, TO DeviceProfile);
+
+CREATE DIRECTED EDGE INVESTIGATION_INVOLVES (FROM InvestigationCase, TO Transaction);
+CREATE DIRECTED EDGE INVESTIGATION_ON_CARD (FROM InvestigationCase, TO Card);
+CREATE DIRECTED EDGE INVESTIGATION_CONNECTED_CARD (FROM InvestigationCase, TO Card);
+CREATE DIRECTED EDGE INVESTIGATION_DEVICE (FROM InvestigationCase, TO DeviceProfile);
+
+// ------------------------------------------------------------------------------
+// STEP 3: CREATE GRAPH
+// ------------------------------------------------------------------------------
+CREATE GRAPH FraudGraph (*)
+
+// ------------------------------------------------------------------------------
+// STEP 4: QUERIES FOR FraudGraph
+// ------------------------------------------------------------------------------
+USE GRAPH FraudGraph
+
+CREATE OR REPLACE QUERY card_window(VERTEX<Card> target_card, DATETIME center_ts, INT window_hours) FOR GRAPH FraudGraph {
+    Start = { target_card };
+    Txns = SELECT t FROM Start:s -(MADE:e)-> Transaction:t
+           WHERE abs(datetime_diff(t.ts, center_ts)) <= window_hours * 3600
+           ORDER BY t.ts ASC;
+    PRINT Txns;
+}
+
+CREATE OR REPLACE QUERY device_neighbors(VERTEX<DeviceProfile> target_device) FOR GRAPH FraudGraph {
+    Start = { target_device };
+    Txns = SELECT t FROM Start:s <-(FROM_DEVICE:e)- Transaction:t;
+    Cards = SELECT c FROM Txns:t <-(MADE:e)- Card:c;
+    Cases = SELECT cc FROM Start:s <-(CASE_DEVICE:e)- ClosedCase:cc;
+    PRINT Cards, Cases;
+}
+
+CREATE OR REPLACE QUERY region_deviation(VERTEX<Card> target_card) FOR GRAPH FraudGraph {
+    MapAccum<STRING, INT> @@region_counts;
+    Start = { target_card };
+    Txns = SELECT t FROM Start:s -(MADE:e)-> Transaction:t
+           ACCUM @@region_counts += (t.addr1 -> 1);
+    PRINT @@region_counts;
+}
+
+CREATE OR REPLACE QUERY find_similar_cases(STRING target_pattern, DOUBLE min_exposure, DOUBLE max_exposure) FOR GRAPH FraudGraph {
+    AllCases = { ClosedCase.* };
+    Matched = SELECT c FROM AllCases:c
+              WHERE c.pattern == target_pattern 
+                AND c.exposure_usd >= min_exposure 
+                AND c.exposure_usd <= max_exposure
+              LIMIT 10;
+    PRINT Matched;
+}
+
+// ------------------------------------------------------------------------------
+// STEP 5: INSTALL QUERIES
+// ------------------------------------------------------------------------------
+INSTALL QUERY card_window, device_neighbors, region_deviation, find_similar_cases

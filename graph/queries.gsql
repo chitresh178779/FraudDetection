@@ -1,0 +1,60 @@
+// ==============================================================================
+// TigerGraph Savanna GSQL Queries: FraudGraph
+// Paste and run this script in TigerGraph Savanna Query Tool AFTER creating FraudGraph
+// ==============================================================================
+
+USE GRAPH FraudGraph
+
+// 1. Query: card_window
+// Traverses transactions on a card around a target timestamp within +/- window_hours
+CREATE OR REPLACE QUERY card_window(VERTEX<Card> target_card, DATETIME center_ts, INT window_hours) FOR GRAPH FraudGraph {
+    Start = { target_card };
+    
+    Txns = SELECT t FROM Start:s -(MADE:e)-> Transaction:t
+           WHERE abs(datetime_diff(t.ts, center_ts)) <= window_hours * 3600
+           ORDER BY t.ts ASC;
+           
+    PRINT Txns;
+}
+
+// 2. Query: device_neighbors
+// Finds all connected cards, transactions, and historical cases linked to a device profile
+CREATE OR REPLACE QUERY device_neighbors(VERTEX<DeviceProfile> target_device) FOR GRAPH FraudGraph {
+    Start = { target_device };
+    
+    Txns = SELECT t FROM Start:s <-(FROM_DEVICE:e)- Transaction:t;
+    Cards = SELECT c FROM Txns:t <-(MADE:e)- Card:c;
+    Cases = SELECT cc FROM Start:s <-(CASE_DEVICE:e)- ClosedCase:cc;
+    
+    PRINT Cards, Cases;
+}
+
+// 3. Query: region_deviation
+// Computes billing region distribution for a card to detect out-of-region deviations
+CREATE OR REPLACE QUERY region_deviation(VERTEX<Card> target_card) FOR GRAPH FraudGraph {
+    MapAccum<STRING, INT> @@region_counts;
+    
+    Start = { target_card };
+    
+    Txns = SELECT t FROM Start:s -(MADE:e)-> Transaction:t
+           ACCUM @@region_counts += (t.addr1 -> 1);
+           
+    PRINT @@region_counts;
+}
+
+// 4. Query: find_similar_cases
+// Retrieves past historical cases with matching typology pattern and similar dollar exposure
+CREATE OR REPLACE QUERY find_similar_cases(STRING target_pattern, DOUBLE min_exposure, DOUBLE max_exposure) FOR GRAPH FraudGraph {
+    AllCases = { ClosedCase.* };
+    
+    Matched = SELECT c FROM AllCases:c
+              WHERE c.pattern == target_pattern 
+                AND c.exposure_usd >= min_exposure 
+                AND c.exposure_usd <= max_exposure
+              LIMIT 10;
+              
+    PRINT Matched;
+}
+
+// 5. Install all queries into TigerGraph engine
+INSTALL QUERY card_window, device_neighbors, region_deviation, find_similar_cases
