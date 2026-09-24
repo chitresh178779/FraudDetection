@@ -37,28 +37,47 @@
     "initial": [
       {
         "action": "DECLINE_TRANSACTION",
+        "title": "Decline Transaction at Gateway",
+        "plain_english": "Prevent authorization of the flagged charge ($292.36) before merchant settlement, protecting account balances.",
         "route": "L1",
+        "route_label": "Level 1 Fraud Specialist Approval",
         "reason": "R1: high risk score, decline authorization pending verification"
       },
       {
         "action": "VERIFY_WITH_CUSTOMER",
+        "title": "Contact Cardholder for Authorization",
+        "plain_english": "Send an urgent two-way SMS and mobile banking push notification to verify whether the cardholder authorized this purchase before taking permanent action.",
         "route": "auto",
+        "route_label": "Instant Automated Action",
         "reason": "R1: confirm unauthorized use before permanent block"
       }
     ],
     "final": [
       {
         "action": "BLOCK_CARD",
+        "title": "Deactivate Compromised Card",
+        "plain_english": "Immediately deactivate card C11891-K1 to block further unauthorized purchases by criminals, and dispatch an expedited replacement card to the cardholder.",
         "route": "L1",
+        "route_label": "Level 1 Fraud Specialist Approval",
         "reason": "R2: confirmed unauthorized activity; exposure $292.36 is under $2,500"
       },
       {
         "action": "CREATE_CASE",
+        "title": "Open Formal Fraud Investigation Case",
+        "plain_english": "Generate a permanent internal fraud incident record linking the TigerGraph transaction trail for chargeback recovery and merchant dispute.",
         "route": "auto",
+        "route_label": "Instant Automated Action",
         "reason": "R2: internal case record created with graph evidence attached"
       }
     ],
     "what_changed": "Customer response confirmed unauthorized activity, raising fraud probability to 0.91 and escalating recommendations to BLOCK_CARD and CREATE_CASE."
+  },
+  "plain_english_report": {
+    "headline": "Confirmed Fraud: Unauthorized Card-Not-Present Charge ($292.36)",
+    "trigger_summary": "The bank's real-time risk engine automatically flagged transaction #3478782 ($292.36) on card C11891-K1 with an elevated risk alert requiring verification.",
+    "graph_findings": "Online transaction analysis confirmed the purchase originated from an unrecognized device profile with no prior relationship to this customer account.",
+    "customer_outcome": "During verification, the response recorded: 'Customer states they did not make this transaction, remains in possession of the card, and requests card protection.'",
+    "conclusion": "The evidence confirms card C11891-K1 has been compromised. Total financial exposure is $292.36. The card has been blocked to prevent further fraud, and an internal dispute file has been created."
   },
   "sar": {
     "file": false,
@@ -70,6 +89,6 @@
   },
   "stop_reason": "Customer denial and graph evidence confirmed compromise; appropriate block, case, and protective actions taken.",
   "tool_calls": 5,
-  "tokens": 1713,
-  "latency_s": 1.09
+  "tokens": 2179,
+  "latency_s": 0.93
 }

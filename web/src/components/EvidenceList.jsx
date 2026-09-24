@@ -7,13 +7,13 @@ export default function EvidenceList({ evidence }) {
   const getSourceIcon = (source) => {
     switch (source) {
       case 'graph':
-        return <Database size={13} color="#38bdf8" />;
+        return <Database size={13} color="#0284C7" />;
       case 'customer':
-        return <UserCheck size={13} color="#34d399" />;
+        return <UserCheck size={13} color="#059669" />;
       case 'document':
-        return <FileText size={13} color="#fbbf24" />;
+        return <FileText size={13} color="#D97706" />;
       default:
-        return <Globe size={13} color="#60a5fa" />;
+        return <Globe size={13} color="#7C3AED" />;
     }
   };
 
@@ -31,50 +31,59 @@ export default function EvidenceList({ evidence }) {
   };
 
   return (
-    <div className="glass-panel" style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Supporting Investigation Evidence ({evidence.length})</h3>
-        <span style={{ fontSize: '11px', color: '#64748b' }}>Graph & Attributed Context</span>
+    <div className="glass-panel" style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div>
+          <h3 style={{ fontSize: '18px', fontWeight: 600, fontFamily: 'var(--font-heading)', color: '#121212' }}>
+            Supporting Investigation Evidence ({evidence.length})
+          </h3>
+          <div style={{ fontSize: '11px', color: '#71717A', marginTop: '2px' }}>
+            Attributed graph traversals and contextual validation records
+          </div>
+        </div>
+        <span className="badge badge-auto">Graph-Grounded</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {evidence.map((ev, i) => (
           <div 
             key={i} 
             style={{ 
-              padding: '12px 14px', 
-              background: '#090f1d', 
-              borderRadius: '6px', 
-              border: '1px solid #1e293b',
+              padding: '14px 16px', 
+              background: '#FAF9F8', 
+              borderRadius: '12px', 
+              border: '1px solid var(--border-subtle)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '8px',
+              transition: 'all 0.15s ease'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span className={`badge ${getSourceBadgeClass(ev.source)}`}>
-                {getSourceIcon(ev.source)} {ev.source}
+              <span className={`badge ${getSourceBadgeClass(ev.source)}`} style={{ textTransform: 'capitalize' }}>
+                {getSourceIcon(ev.source)} {ev.source} Traversal
               </span>
-              <span className="mono" style={{ fontSize: '11px', color: '#64748b' }}>
+              <span className="mono" style={{ fontSize: '11px', color: '#71717A' }}>
                 {ev.ref}
               </span>
             </div>
 
-            <p style={{ fontSize: '13px', color: '#cbd5e1', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '13px', color: '#3F3F46', lineHeight: 1.5 }}>
               {ev.claim}
             </p>
 
             {ev.entity_ids && ev.entity_ids.length > 0 && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                <span style={{ fontSize: '10px', color: '#64748b', alignSelf: 'center', fontWeight: 600 }}>Entities:</span>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginTop: '2px' }}>
+                <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 600 }}>Linked Entities:</span>
                 {ev.entity_ids.map((id, idx) => (
                   <span key={idx} className="mono" style={{ 
-                    fontSize: '10px', 
-                    padding: '2px 6px', 
-                    borderRadius: '4px', 
-                    background: '#141e33', 
-                    border: '1px solid #22324d',
-                    color: '#94a3b8' 
+                    fontSize: '11px', 
+                    padding: '2px 8px', 
+                    borderRadius: '9999px', 
+                    background: '#FFFFFF', 
+                    border: '1px solid #E4E4E0',
+                    color: '#121212',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                   }}>
                     {id}
                   </span>

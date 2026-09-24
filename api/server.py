@@ -193,9 +193,10 @@ def get_case_detail(case_id: str):
 @app.get("/api/cases/{case_id}/graph")
 def get_case_subgraph(case_id: str):
     """
-    Constructs an interactive graph network (nodes & edges)
-    representing Customer, Card, Transactions, DeviceProfile, BillingRegion, and ClosedCases.
-    Supports preview graph when pending.
+    Constructs an interactive knowledge graph network (nodes & edges)
+    representing Customer, Card, Transactions, DeviceProfile, BillingRegion, Connected Cards,
+    and Historical Case Precedents.
+    Includes rich node preview details for interactive hover tooltips.
     """
     import pandas as pd
     df_pack = pd.read_csv(r"d:\HackerHouseGoa\data\case_pack.csv")
@@ -206,6 +207,7 @@ def get_case_subgraph(case_id: str):
     cust_id = str(row["customer_id"])
     card_id = str(row["card_id"])
     flagged_tid = str(row["flagged_txn_id"])
+    txn = engine.get_transaction(flagged_tid) or {}
 
     p = os.path.join(CASES_DIR, f"{case_id}.json")
     if os.path.exists(p):
@@ -213,80 +215,165 @@ def get_case_subgraph(case_id: str):
             with open(p, "r", encoding="utf-8") as f:
                 case_data = json.load(f)
                 c = case_data["case"]
+                sar = case_data.get("sar", {})
                 cid = case_data["case_id"]
         except Exception:
             c = {"verdict": "pending"}
+            sar = {}
             cid = case_id
     else:
         c = {"verdict": "pending"}
+        sar = {}
         cid = case_id
 
     nodes = []
     edges = []
+    seen_nodes = set()
 
-    # Node: Customer
-    nodes.append({
+    def add_node(node_dict):
+        if node_dict["id"] not in seen_nodes:
+            seen_nodes.add(node_dict["id"])
+            nodes.append(node_dict)
+
+    # 1. Customer Node
+    add_node({
         "id": cust_id,
-        "label": cust_id,
+        "label": "Customer",
+        "sublabel": cust_id,
         "type": "Customer",
-        "color": "#38bdf8"
+        "color": "#2563eb",
+        "details": {
+            "Customer ID": cust_id,
+            "Primary Card": card_id,
+            "Account Status": "Active Bank Cardholder",
+            "Dispute History": "1 Report" if row.get("trigger_type") == "customer_report" else "None"
+        }
     })
 
-    # Node: Card
-    nodes.append({
+    # 2. Card Account Node
+    card_network = str(txn.get("card4", "Bank Card")).upper()
+    card_type = str(txn.get("card6", "card")).capitalize()
+    add_node({
         "id": card_id,
-        "label": card_id,
+        "label": "Card",
+        "sublabel": card_id,
         "type": "Card",
-        "color": "#818cf8"
+        "color": "#0284c7",
+        "details": {
+            "Card ID": card_id,
+            "Cardholder": cust_id,
+            "Network": card_network,
+            "Type": card_type,
+            "Investigation Status": c.get("verdict", "pending").upper()
+        }
     })
+
+    # Customer OWNS Card
     edges.append({
         "source": cust_id,
         "target": card_id,
         "label": "OWNS"
     })
 
-    # Node: Flagged Transaction
-    txn_color = "#f43f5e" if c.get("verdict") == "fraud" else ("#10b981" if c.get("verdict") == "legitimate" else "#f59e0b")
-    nodes.append({
+    # 3. Central Flagged Transaction Node
+    txn_amt = float(txn.get("TransactionAmt", row.get("exposure_usd", 0.0) or 0.0))
+    txn_color = "#ea580c"  # Signature warm orange as in reference Image 2
+    add_node({
         "id": f"TXN_{flagged_tid}",
-        "label": f"Txn #{flagged_tid}",
+        "label": "Txn",
+        "sublabel": f"#{flagged_tid}",
         "type": "Transaction",
         "color": txn_color,
-        "flagged": True
+        "flagged": True,
+        "details": {
+            "Transaction ID": flagged_tid,
+            "Amount": f"${txn_amt:.2f} USD",
+            "Channel": str(txn.get("channel", "online")).replace("_", " ").title(),
+            "Timestamp": str(txn.get("ts", row.get("opened_at", "2016-12"))),
+            "Risk Score": f"{float(row.get('risk_score')):.2f}" if pd.notna(row.get("risk_score")) else "Dispute Alert",
+            "Role": "Primary Trigger Transaction",
+            "Email Domain": str(txn.get("P_emaildomain", "N/A"))
+        }
     })
+
+    # Customer MADE Transaction
     edges.append({
-        "source": card_id,
+        "source": cust_id,
         "target": f"TXN_{flagged_tid}",
         "label": "MADE"
     })
 
-    # Additional affected transactions
-    for tid in c.get("affected_txn_ids", []):
-        if str(tid) != flagged_tid:
-            node_id = f"TXN_{tid}"
-            nodes.append({
-                "id": node_id,
-                "label": f"Txn #{tid}",
-                "type": "Transaction",
-                "color": "#fb7185",
-                "flagged": False
-            })
-            edges.append({
-                "source": card_id,
-                "target": node_id,
-                "label": "MADE"
-            })
+    # Card PAID_WITH Transaction
+    edges.append({
+        "source": card_id,
+        "target": f"TXN_{flagged_tid}",
+        "label": "PAID_WITH"
+    })
 
-    # Device Profile Node
+    # 4. Billing Region Node
+    addr1 = txn.get("addr1")
+    if addr1 and pd.notna(addr1):
+        region_code = str(int(float(addr1)))
+        add_node({
+            "id": f"REGION_{region_code}",
+            "label": "Region",
+            "sublabel": region_code,
+            "type": "BillingRegion",
+            "color": "#0d9488",
+            "details": {
+                "Region Code": region_code,
+                "Country Code": str(txn.get("addr2", "87.0")),
+                "Type": "Card Billing Postal Region"
+            }
+        })
+        # Txn BILLED_IN Region
+        edges.append({
+            "source": f"TXN_{flagged_tid}",
+            "target": f"REGION_{region_code}",
+            "label": "BILLED_IN"
+        })
+
+    # 5. Device Profile Node
+    device_prof = txn.get("device_profile")
     device_sig = c.get("connected_device_profiles", [])
-    if device_sig:
-        dev_label = device_sig[0][:25] + "..." if len(device_sig[0]) > 25 else device_sig[0]
-        nodes.append({
-            "id": "DEV_NODE",
-            "label": dev_label,
+    if device_prof:
+        browser_info = str(device_prof.get("browser", "")).strip()
+        os_info = str(device_prof.get("os", "")).strip()
+        dev_sublabel = browser_info if browser_info and browser_info != "Unknown Browser" else (os_info if os_info else "Device")
+        dev_id = device_prof.get("device_id", "DEV_NODE")
+        add_node({
+            "id": dev_id,
+            "label": "Device",
+            "sublabel": dev_sublabel[:14],
             "type": "DeviceProfile",
-            "color": "#fbbf24",
-            "full_sig": device_sig[0]
+            "color": "#7c3aed",
+            "details": {
+                "Hardware": device_prof.get("device_info", "Hardware Signature"),
+                "Operating System": os_info,
+                "Browser Engine": browser_info,
+                "Screen Resolution": device_prof.get("screen", "Unknown"),
+                "Device Class": device_prof.get("device_type", "mobile/desktop"),
+                "Status": "New Device" if device_prof.get("is_new") == "New" else "Known Profile"
+            }
+        })
+        edges.append({
+            "source": f"TXN_{flagged_tid}",
+            "target": dev_id,
+            "label": "FROM_DEVICE"
+        })
+    elif device_sig:
+        dev_sublabel = device_sig[0].split('|')[0].strip() if '|' in device_sig[0] else device_sig[0][:14]
+        add_node({
+            "id": "DEV_NODE",
+            "label": "Device",
+            "sublabel": dev_sublabel[:14],
+            "type": "DeviceProfile",
+            "color": "#7c3aed",
+            "details": {
+                "Fingerprint": device_sig[0],
+                "Category": "Hardware Telemetry",
+                "Risk": "Observed in investigation"
+            }
         })
         edges.append({
             "source": f"TXN_{flagged_tid}",
@@ -294,47 +381,101 @@ def get_case_subgraph(case_id: str):
             "label": "FROM_DEVICE"
         })
 
-    # Connected Cards
-    for cc in c.get("connected_card_ids", []):
-        nodes.append({
-            "id": cc,
-            "label": cc,
-            "type": "ConnectedCard",
-            "color": "#f97316"
-        })
-        if device_sig:
+    # 6. Additional affected transactions
+    for tid in c.get("affected_txn_ids", []):
+        if str(tid) != flagged_tid:
+            node_id = f"TXN_{tid}"
+            aff_txn = engine.get_transaction(str(tid)) or {}
+            aff_amt = float(aff_txn.get("TransactionAmt", 0.0))
+            add_node({
+                "id": node_id,
+                "label": "Txn",
+                "sublabel": f"#{tid}",
+                "type": "Transaction",
+                "color": "#f87171",
+                "flagged": False,
+                "details": {
+                    "Transaction ID": str(tid),
+                    "Amount": f"${aff_amt:.2f} USD" if aff_amt else "Under Dispute",
+                    "Channel": str(aff_txn.get("channel", "online")),
+                    "Role": "Compromised Episode Transaction"
+                }
+            })
             edges.append({
-                "source": "DEV_NODE",
-                "target": cc,
-                "label": "SHARED_BY"
+                "source": card_id,
+                "target": node_id,
+                "label": "PAID_WITH"
             })
 
-    # Historical Closed Cases
+    # 7. Connected Cards
+    dev_target_id = (device_prof.get("device_id", "DEV_NODE") if device_prof else "DEV_NODE")
+    for cc in c.get("connected_card_ids", []):
+        add_node({
+            "id": cc,
+            "label": "Card",
+            "sublabel": cc,
+            "type": "ConnectedCard",
+            "color": "#ea580c",
+            "details": {
+                "Card ID": cc,
+                "Relationship": "Shares Hardware Device Profile",
+                "Risk Indicator": "Syndicate / Shared Device Ring"
+            }
+        })
+        if dev_target_id in seen_nodes:
+            edges.append({
+                "source": dev_target_id,
+                "target": cc,
+                "label": "SHARED_DEVICE"
+            })
+
+    # 8. Historical Closed Cases / Precedents (SIMILAR_TO Txn)
     for sc in c.get("similar_prior_cases", []):
-        nodes.append({
+        past_case = engine.closed_cases.get(sc, {})
+        past_exposure = past_case.get("exposure_usd", 0.0)
+        add_node({
             "id": sc,
-            "label": sc,
+            "label": "Similar",
+            "sublabel": sc,
             "type": "ClosedCase",
-            "color": "#c084fc"
+            "color": "#dc2626",
+            "details": {
+                "Case Precedent": sc,
+                "Ground Truth Outcome": str(past_case.get("outcome", "resolved")).replace("_", " ").title(),
+                "Typology": str(past_case.get("pattern", "N/A")).replace("_", " ").title(),
+                "Historical Exposure": f"${past_exposure:.2f} USD",
+                "Remediation Action": str(past_case.get("actions_taken", "N/A")),
+                "SAR Filed": str(past_case.get("report_filed", "No"))
+            }
         })
         edges.append({
-            "source": card_id,
+            "source": f"TXN_{flagged_tid}",
             "target": sc,
-            "label": "SIMILAR_PRECEDENT"
+            "label": "SIMILAR_TO"
         })
 
-    # Current Investigation Case Node
-    nodes.append({
-        "id": f"CASE_{cid}",
-        "label": cid,
-        "type": "InvestigationCase",
-        "color": "#a855f7"
-    })
-    edges.append({
-        "source": f"CASE_{cid}",
-        "target": card_id,
-        "label": "INVESTIGATES"
-    })
+    # 9. Investigation Case Node (if investigated or tracking case)
+    if c.get("verdict") and c.get("verdict") != "pending":
+        add_node({
+            "id": f"CASE_{cid}",
+            "label": "Case",
+            "sublabel": cid,
+            "type": "InvestigationCase",
+            "color": "#18181b",
+            "details": {
+                "Case ID": cid,
+                "Verdict": c.get("verdict", "Pending").upper(),
+                "Typology Pattern": str(c.get("pattern", "Pending Analysis")).replace("_", " ").title(),
+                "Assessed Exposure": f"${float(c.get('exposure_usd', txn_amt)):.2f} USD",
+                "SAR Required": "Yes (FinCEN SAR Generated)" if sar.get("file") else "Exempt / No",
+                "Graph Writeback": "Stored in TigerGraph Memory" if c.get("written_to_graph") else "Pending Writeback"
+            }
+        })
+        edges.append({
+            "source": f"CASE_{cid}",
+            "target": f"TXN_{flagged_tid}",
+            "label": "VERDICT"
+        })
 
     return {"nodes": nodes, "edges": edges}
 

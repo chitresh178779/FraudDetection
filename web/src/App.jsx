@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, ShieldCheck, HelpCircle, Activity, 
   Search, Play, AlertOctagon, CheckCircle, Database, RefreshCw, Cpu,
-  RotateCcw, ArrowRight, CheckCircle2, AlertTriangle, FileText, User, CreditCard, DollarSign, MapPin, Smartphone, Layers
+  RotateCcw, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, FileText, 
+  User, CreditCard, DollarSign, MapPin, Smartphone, Layers, Sparkles,
+  ChevronLeft, ChevronRight, CornerDownLeft, Eye, Clock, Shield, SlidersHorizontal
 } from 'lucide-react';
 
 import GraphCanvas from './components/GraphCanvas';
@@ -10,10 +12,12 @@ import NextBestActionTimeline from './components/NextBestActionTimeline';
 import EvidenceList from './components/EvidenceList';
 import SarViewer from './components/SarViewer';
 import CaseMemoryCard from './components/CaseMemoryCard';
+import InvestigationExecutionChain from './components/InvestigationExecutionChain';
 
 export default function App() {
   const [cases, setCases] = useState([]);
-  const [selectedCaseId, setSelectedCaseId] = useState('HHG-001');
+  const [selectedCaseId, setSelectedCaseId] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'detail'
   const [caseDetail, setCaseDetail] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [filterTab, setFilterTab] = useState('all');
@@ -30,6 +34,17 @@ export default function App() {
     fetchCases();
   }, []);
 
+  // Keyboard shortcut: Esc to return to list view
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && viewMode === 'detail') {
+        setViewMode('list');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode]);
+
   const fetchHealth = () => {
     fetch('/api/health')
       .then(res => res.json())
@@ -42,16 +57,20 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         setCases(data);
-        const targetId = preferredId || (data.length > 0 ? data[0].case_id : null);
-        if (targetId) {
-          loadCase(targetId);
+        if (preferredId) {
+          loadCase(preferredId, false);
         }
       })
       .catch(err => console.error(err));
   };
 
-  const loadCase = (cid) => {
+  const loadCase = (cid, openView = true) => {
     setSelectedCaseId(cid);
+    if (openView) {
+      setViewMode('detail');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     fetch(`/api/cases/${cid}`)
       .then(res => res.json())
       .then(d => setCaseDetail(d))
@@ -61,6 +80,29 @@ export default function App() {
       .then(res => res.json())
       .then(g => setGraphData(g))
       .catch(err => console.error(err));
+  };
+
+  const openTransactionDetail = (cid) => {
+    loadCase(cid, true);
+  };
+
+  const backToTransactionList = () => {
+    setViewMode('list');
+    fetchCases();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Navigate to Prev / Next case while in Detail view
+  const navigateCase = (direction) => {
+    const currentList = filteredCases.length > 0 ? filteredCases : cases;
+    const currentIndex = currentList.findIndex(c => c.case_id === selectedCaseId);
+    if (currentIndex === -1) return;
+
+    let targetIndex = currentIndex + direction;
+    if (targetIndex < 0) targetIndex = currentList.length - 1;
+    if (targetIndex >= currentList.length) targetIndex = 0;
+
+    loadCase(currentList[targetIndex].case_id, true);
   };
 
   // Run live agent investigation for single selected case
@@ -96,7 +138,7 @@ export default function App() {
           .then(res => res.json())
           .then(g => setGraphData(g));
 
-        // Refresh cases list to update sidebar badges
+        // Refresh cases list
         fetchCases(selectedCaseId);
       })
       .catch(err => {
@@ -114,7 +156,10 @@ export default function App() {
       .then(res => res.json())
       .then(() => {
         setIsResetting(false);
-        fetchCases(selectedCaseId || 'HHG-001');
+        fetchCases();
+        if (selectedCaseId) {
+          loadCase(selectedCaseId, false);
+        }
       })
       .catch(err => {
         console.error(err);
@@ -130,6 +175,9 @@ export default function App() {
       .then(() => {
         setIsBatchRunning(false);
         fetchCases(selectedCaseId);
+        if (selectedCaseId) {
+          loadCase(selectedCaseId, false);
+        }
       })
       .catch(err => {
         console.error(err);
@@ -142,7 +190,8 @@ export default function App() {
     const matchesSearch = c.case_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (c.pattern && c.pattern.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (c.trigger_text && c.trigger_text.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (c.card_id && c.card_id.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (c.card_id && c.card_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (c.flagged_txn_id && c.flagged_txn_id.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
     if (filterTab === 'pending') return !c.investigated || c.verdict === 'pending';
     if (filterTab === 'fraud') return c.investigated && c.verdict === 'fraud';
@@ -162,76 +211,93 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Top Header */}
+      {/* Sticky Structured Navigation Bar */}
       <header className="app-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Brand Identity */}
+        <div 
+          onClick={backToTransactionList}
+          style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' }}
+          title="Return to All Transactions"
+        >
           <div style={{ 
-            background: '#2563eb', 
-            padding: '7px', 
-            borderRadius: '6px',
+            background: '#0F172A', 
+            padding: '9px', 
+            borderRadius: '10px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: '1px solid #3b82f6'
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.2)'
           }}>
-            <ShieldAlert size={20} color="#ffffff" />
+            <ShieldAlert size={20} color="#FFFFFF" />
           </div>
           <div>
-            <div className="brand-title" style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-              TigerGraph Agentic Fraud Investigation
+            <div className="brand-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+              Runway Fraud & Incident Response
             </div>
-            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-              Autonomous GraphRAG & Next-Best Action Engine • HHGOA 2026
+            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>
+              Autonomous TigerGraph GraphRAG & Policy Engine • Production Systems
             </div>
           </div>
         </div>
 
         {/* Global Key Metrics & Quick Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right', padding: '4px 10px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-            <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total Alerts</div>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>
-              {cases.length} Alerts
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'right', padding: '4px 10px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-            <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Pending</div>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: pendingCount > 0 ? '#38bdf8' : '#94a3b8' }}>
-              {pendingCount} Pending
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'right', padding: '4px 10px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-            <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Fraud / Legit</div>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700 }}>
-              <span style={{ color: '#f87171' }}>{fraudCount}</span> / <span style={{ color: '#34d399' }}>{legitCount}</span>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'right', padding: '4px 10px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-            <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>SARs Filed</div>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#fbbf24' }}>
-              {sarCount} Filings
-            </div>
-          </div>
-
+          {/* Metrics Cluster */}
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
-            padding: '6px 12px', 
-            background: '#06261e', 
-            border: '1px solid #065f46', 
-            borderRadius: '6px' 
+            background: '#F8FAFC',
+            padding: '4px 6px',
+            borderRadius: '10px',
+            border: '1.5px solid var(--border-subtle)'
+          }}>
+            <div style={{ padding: '4px 10px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', fontWeight: 800 }}>Total</span>
+              <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', marginLeft: '6px' }}>
+                {cases.length}
+              </span>
+            </div>
+
+            <div style={{ padding: '4px 10px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', fontWeight: 800 }}>Pending</span>
+              <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: pendingCount > 0 ? '#2563EB' : '#64748B', marginLeft: '6px' }}>
+                {pendingCount}
+              </span>
+            </div>
+
+            <div style={{ padding: '4px 10px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', fontWeight: 800 }}>Fraud / Legit</span>
+              <span className="mono" style={{ fontSize: '12px', fontWeight: 800, marginLeft: '6px' }}>
+                <span style={{ color: '#DC2626' }}>{fraudCount}</span> / <span style={{ color: '#15803D' }}>{legitCount}</span>
+              </span>
+            </div>
+
+            <div style={{ padding: '4px 10px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', fontWeight: 800 }}>SARs</span>
+              <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: '#D97706', marginLeft: '6px' }}>
+                {sarCount}
+              </span>
+            </div>
+          </div>
+
+          {/* Engine Status Indicator */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            padding: '7px 14px', 
+            background: '#F0FDF4', 
+            border: '1.5px solid #86EFAC', 
+            borderRadius: '9px' 
           }}>
             <span className="pulsing-dot"></span>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#34d399' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803D' }}>
               {health?.tigergraph_connected ? "TigerGraph Savanna Online" : "TigerGraph GraphEngine Active"}
             </span>
           </div>
 
-          {/* Quick Demo Control Buttons */}
+          {/* Global Buttons */}
           <button 
             onClick={handleResetAll}
             disabled={isResetting}
@@ -239,14 +305,14 @@ export default function App() {
             title="Reset all 20 cases back to uninvestigated pending state"
           >
             <RotateCcw size={13} className={isResetting ? "spin" : ""} />
-            {isResetting ? "Resetting..." : "Reset to Pending"}
+            {isResetting ? "Resetting..." : "Reset"}
           </button>
 
           {pendingCount > 0 && (
             <button 
               onClick={handleInvestigateAll}
               disabled={isBatchRunning}
-              className="btn-secondary"
+              className="btn-primary"
               title="Run investigation on all remaining pending alerts"
             >
               <Play size={13} className={isBatchRunning ? "spin" : ""} />
@@ -256,414 +322,552 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Body */}
+      {/* Main Content Area */}
       <div className="app-body">
-        {/* Cases Sidebar */}
-        <aside className="cases-sidebar">
-          <div className="sidebar-header">
-            <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
-              <input 
-                type="text"
-                placeholder="Search case, trigger, card..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 10px 7px 32px',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '6px',
-                  color: '#f8fafc',
-                  fontSize: '12px',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div className="case-filter-tabs">
-              <button 
-                className={`filter-tab ${filterTab === 'all' ? 'active' : ''}`}
-                onClick={() => setFilterTab('all')}
-              >
-                All ({cases.length})
-              </button>
-              <button 
-                className={`filter-tab ${filterTab === 'pending' ? 'active' : ''}`}
-                onClick={() => setFilterTab('pending')}
-              >
-                Pending ({pendingCount})
-              </button>
-              <button 
-                className={`filter-tab ${filterTab === 'fraud' ? 'active' : ''}`}
-                onClick={() => setFilterTab('fraud')}
-              >
-                Fraud ({fraudCount})
-              </button>
-              <button 
-                className={`filter-tab ${filterTab === 'legitimate' ? 'active' : ''}`}
-                onClick={() => setFilterTab('legitimate')}
-              >
-                Legit ({legitCount})
-              </button>
-              <button 
-                className={`filter-tab ${filterTab === 'sar' ? 'active' : ''}`}
-                onClick={() => setFilterTab('sar')}
-              >
-                SAR ({sarCount})
-              </button>
-            </div>
-          </div>
-
-          <div className="cases-list">
-            {filteredCases.map(c => {
-              const isSelected = c.case_id === selectedCaseId;
-              const isPending = !c.investigated || c.verdict === 'pending';
-              const isFraud = c.investigated && c.verdict === 'fraud';
-              const isLegit = c.investigated && c.verdict === 'legitimate';
-
-              // Format intuitive trigger label
-              let triggerLabel = "Alert";
-              if (c.trigger_type === 'customer_report') {
-                triggerLabel = "Customer Dispute";
-              } else if (c.trigger_type === 'analyst_request') {
-                triggerLabel = "Analyst Ring Flag";
-              } else if (c.risk_score) {
-                triggerLabel = `Risk Score: ${c.risk_score.toFixed(2)}`;
-              }
-
-              return (
-                <div 
-                  key={c.case_id}
-                  className={`case-card-item ${isSelected ? 'selected' : ''}`}
-                  onClick={() => loadCase(c.case_id)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: isSelected ? '#a5b4fc' : '#f8fafc' }}>
-                      {c.case_id}
-                    </span>
-                    {isPending ? (
-                      <span className="badge badge-pending">PENDING</span>
-                    ) : isFraud ? (
-                      <span className="badge badge-fraud">FRAUD</span>
-                    ) : (
-                      <span className="badge badge-legit">LEGITIMATE</span>
-                    )}
-                  </div>
-
-                  <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'capitalize' }}>
-                    {isPending ? triggerLabel : (c.pattern ? c.pattern.replace(/_/g, ' ') : 'Legitimate')}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
-                    <span className="mono">
-                      ${c.exposure_usd?.toFixed(2)} USD
-                    </span>
-                    {c.sar_file && (
-                      <span className="badge badge-L2" style={{ fontSize: '9px', padding: '1px 5px' }}>
-                        SAR Filed
-                      </span>
-                    )}
-                  </div>
+        {viewMode === 'list' ? (
+          /* ================================================================ */
+          /* MAIN FLOW VIEW: SEQUENTIAL RECTANGULAR CARDS IN CENTER           */
+          /* ================================================================ */
+          <div className="main-content-flow">
+            {/* Hero Banner Header */}
+            <div className="glass-panel" style={{ padding: '34px 38px' }}>
+              <div style={{ maxWidth: '820px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <span className="badge badge-auto" style={{ fontWeight: 800 }}>Benchmark Exam Pack</span>
+                  <span className="badge badge-pending" style={{ fontWeight: 700 }}>20 Production Cases</span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
+                    IEEE-CIS Real-Time Financial Stream
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        </aside>
 
-        {/* Workspace Main Panel */}
-        <main className="workspace-main">
-          {caseDetail && (
-            <>
-              {!isCurrentInvestigated ? (
-                /* ========================================================== */
-                /* UNINVESTIGATED PENDING STATE: INCOMING ALERT DOSSIER       */
-                /* ========================================================== */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Alert Header Banner */}
-                  <div className="glass-panel" style={{ padding: '24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <h2 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                            {caseDetail.case_id}
-                          </h2>
-                          <span className="badge badge-pending" style={{ fontSize: '12px', padding: '4px 10px' }}>
-                            Awaiting Investigation
-                          </span>
-                          <span className="badge badge-auto" style={{ fontSize: '11px' }}>
-                            {caseDetail.trigger_type === 'customer_report' ? 'Customer Report' : 
-                             caseDetail.trigger_type === 'analyst_request' ? 'Analyst Request' : 'Real-Time Model Score'}
-                          </span>
-                        </div>
+                <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
+                  Test Transactions & Autonomous Investigations
+                </h1>
+                <p style={{ fontSize: '14px', color: '#475569', marginTop: '10px', lineHeight: 1.6, fontWeight: 500 }}>
+                  Each rectangular card below represents a flagged test transaction requiring verification. 
+                  Click on any transaction to open its dedicated investigation workspace, featuring the interactive 
+                  TigerGraph knowledge subgraph, autonomous execution chain, and regulatory SAR reporting.
+                </p>
+              </div>
 
-                        {/* Incoming Trigger Callout Box */}
-                        <div style={{ 
-                          background: '#090f1d', 
-                          border: '1px solid #1e293b', 
-                          borderLeft: '4px solid #3b82f6',
-                          borderRadius: '6px', 
-                          padding: '14px 16px', 
-                          marginTop: '16px',
-                          maxWidth: '850px'
+              {/* Filter and Search Bar */}
+              <div style={{ 
+                marginTop: '26px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                flexWrap: 'wrap', 
+                gap: '16px', 
+                paddingTop: '22px', 
+                borderTop: '1.5px solid var(--border-subtle)' 
+              }}>
+                {/* Search Input */}
+                <div style={{ position: 'relative', width: '380px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: '#64748B' }} />
+                  <input 
+                    type="text"
+                    placeholder="Search by case ID, transaction ID, card, customer..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px 10px 40px',
+                      background: '#FFFFFF',
+                      border: '1.5px solid var(--border-card)',
+                      borderRadius: '10px',
+                      color: '#0F172A',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      outline: 'none',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
+                  />
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="case-filter-tabs">
+                  <button 
+                    className={`filter-tab ${filterTab === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterTab('all')}
+                  >
+                    All ({cases.length})
+                  </button>
+                  <button 
+                    className={`filter-tab ${filterTab === 'pending' ? 'active' : ''}`}
+                    onClick={() => setFilterTab('pending')}
+                  >
+                    Pending ({pendingCount})
+                  </button>
+                  <button 
+                    className={`filter-tab ${filterTab === 'fraud' ? 'active' : ''}`}
+                    onClick={() => setFilterTab('fraud')}
+                  >
+                    Confirmed Fraud ({fraudCount})
+                  </button>
+                  <button 
+                    className={`filter-tab ${filterTab === 'legitimate' ? 'active' : ''}`}
+                    onClick={() => setFilterTab('legitimate')}
+                  >
+                    Legitimate ({legitCount})
+                  </button>
+                  <button 
+                    className={`filter-tab ${filterTab === 'sar' ? 'active' : ''}`}
+                    onClick={() => setFilterTab('sar')}
+                  >
+                    SARs ({sarCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Rectangular Cards Placed One by One */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredCases.map(c => {
+                const isPending = !c.investigated || c.verdict === 'pending';
+                const isFraud = c.investigated && c.verdict === 'fraud';
+                const isLegit = c.investigated && c.verdict === 'legitimate';
+                const statusClass = isFraud ? 'status-fraud' : (isLegit ? 'status-legit' : 'status-pending');
+
+                let triggerLabel = "Alert Signal";
+                if (c.trigger_type === 'customer_report') {
+                  triggerLabel = "Customer Dispute";
+                } else if (c.trigger_type === 'analyst_request') {
+                  triggerLabel = "Analyst Syndicate Ring Flag";
+                } else if (c.risk_score) {
+                  triggerLabel = `Risk Score: ${c.risk_score.toFixed(2)}`;
+                }
+
+                return (
+                  <div 
+                    key={c.case_id}
+                    className={`transaction-card ${statusClass}`}
+                    onClick={() => openTransactionDetail(c.case_id)}
+                  >
+                    {/* Top Row: Case ID, Status Badge, Trigger, Exposure */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="mono" style={{ 
+                          fontSize: '14px', 
+                          fontWeight: 800, 
+                          color: '#0F172A',
+                          background: '#F1F5F9',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1'
                         }}>
-                          <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#60a5fa', fontWeight: 800, letterSpacing: '0.05em' }}>
-                            Incoming Alert Signal Trigger:
-                          </div>
-                          <div style={{ fontSize: '14px', color: '#f8fafc', marginTop: '6px', lineHeight: 1.5, fontStyle: 'italic' }}>
-                            "{caseDetail.trigger_text || caseDetail.case?.summary}"
-                          </div>
-                        </div>
+                          {c.case_id}
+                        </span>
+
+                        <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                          Txn #{c.flagged_txn_id}
+                        </span>
+
+                        {isPending ? (
+                          <span className="badge badge-pending">PENDING INVESTIGATION</span>
+                        ) : isFraud ? (
+                          <span className="badge badge-fraud">CONFIRMED FRAUD</span>
+                        ) : (
+                          <span className="badge badge-legit">CLEARED LEGITIMATE</span>
+                        )}
+
+                        <span className="badge badge-auto">
+                          {triggerLabel}
+                        </span>
+
+                        {c.sar_file && (
+                          <span className="badge badge-L2">
+                            FinCEN SAR Required
+                          </span>
+                        )}
                       </div>
 
-                      {/* Main Call to Action Button */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                        <button 
-                          onClick={handleInvestigate} 
-                          disabled={isInvestigating}
-                          className="btn-primary-large"
-                          style={{ minWidth: '260px', justifyContent: 'center' }}
-                        >
-                          {isInvestigating ? <RefreshCw size={18} className="spin" /> : <Play size={18} fill="#ffffff" />}
-                          {isInvestigating ? "Reasoning with TigerGraph..." : "Run Agent Investigation"}
-                        </button>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Executes autonomous GraphRAG & policy loop
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', fontWeight: 800 }}>Exposure</span>
+                        <div className="mono" style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>
+                          ${c.exposure_usd?.toFixed(2)} USD
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Parameter Grid */}
+                    <div className="param-grid">
+                      <div className="param-item">
+                        <span className="param-label">Transaction ID</span>
+                        <span className="param-value mono">#{c.flagged_txn_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Amount</span>
+                        <span className="param-value mono">${c.exposure_usd?.toFixed(2)}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Card Account</span>
+                        <span className="param-value mono">{c.card_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Customer ID</span>
+                        <span className="param-value mono">{c.customer_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Detection Score</span>
+                        <span className="param-value mono" style={{ color: c.risk_score && c.risk_score > 0.7 ? '#DC2626' : '#0F172A' }}>
+                          {c.risk_score ? c.risk_score.toFixed(2) : 'Dispute Ref'}
+                        </span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Typology Pattern</span>
+                        <span className="param-value" style={{ textTransform: 'capitalize', color: isFraud ? '#DC2626' : (isLegit ? '#15803D' : '#64748B') }}>
+                          {isPending ? 'Pending Graph Analysis' : (c.pattern ? c.pattern.replace(/_/g, ' ') : 'Legitimate')}
                         </span>
                       </div>
                     </div>
 
-                    {/* Investigation Live Execution Indicator */}
-                    {isInvestigating && (
-                      <div style={{ 
-                        marginTop: '20px', 
-                        padding: '14px', 
-                        background: '#0b162c', 
-                        border: '1px solid #1e3a8a', 
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px'
-                      }}>
-                        <RefreshCw size={18} className="spin" color="#60a5fa" />
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#93c5fd' }}>
-                            {investigationStep || 'Agent actively querying graph and evaluating Bank Fraud Policy v1.0...'}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                            Traversing vertices: Customer, Card, Transactions, DeviceProfile, and ClosedCases Memory.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Raw Flagged Transaction Dossier Grid */}
-                    <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #1e293b' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <CreditCard size={15} color="#3b82f6" />
-                        Flagged Transaction Parameters
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Transaction ID</div>
-                          <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', marginTop: '4px' }}>
-                            #{caseDetail.flagged_txn_id}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Transaction Amount</div>
-                          <div className="mono" style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc', marginTop: '4px' }}>
-                            ${caseDetail.case?.exposure_usd?.toFixed(2)} USD
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Channel / Type</div>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: caseDetail.flagged_txn?.channel === 'online' ? '#38bdf8' : '#34d399', textTransform: 'capitalize', marginTop: '4px' }}>
-                            {caseDetail.flagged_txn?.channel ? caseDetail.flagged_txn.channel.replace('_', ' ') : 'Online'}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Card Account</div>
-                          <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: '#a5b4fc', marginTop: '4px' }}>
-                            {caseDetail.card_id}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Customer ID</div>
-                          <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: '#38bdf8', marginTop: '4px' }}>
-                            {caseDetail.customer_id}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Billing Region</div>
-                          <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: '#cbd5e1', marginTop: '4px' }}>
-                            {caseDetail.flagged_txn?.addr1 || 'Unspecified'}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '12px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Model Risk Score</div>
-                          <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: caseDetail.risk_score && caseDetail.risk_score > 0.7 ? '#f87171' : '#fbbf24', marginTop: '4px' }}>
-                            {caseDetail.risk_score ? caseDetail.risk_score.toFixed(2) : 'Dispute Ref'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pre-Investigation Traversal Plan */}
-                  <div className="glass-panel" style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Layers size={16} color="#3b82f6" />
-                      Autonomous GraphRAG Traversal Plan
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
-                      <div style={{ padding: '14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa', fontWeight: 700, fontSize: '12px' }}>
-                          <span>1. Temporal Card Window</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
-                          Query ±48h window on card {caseDetail.card_id} to detect rapid sub-$5 card-testing sequences or purchase bursts.
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24', fontWeight: 700, fontSize: '12px' }}>
-                          <span>2. Device Ring Traversal</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
-                          Inspect device fingerprint in TigerGraph. Trace other card accounts sharing this device to uncover syndicates.
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399', fontWeight: 700, fontSize: '12px' }}>
-                          <span>3. Geographic Deviation</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
-                          Compute billing region deviation from cardholder home address to identify out-of-region card-present fraud.
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontWeight: 700, fontSize: '12px' }}>
-                          <span>4. Policy & FinCEN SAR</span>
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
-                          Evaluate Rules R1-R9, execute controlled cardholder validation, and file regulatory SAR if threshold is met.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Preliminary Graph Canvas */}
-                  <GraphCanvas graphData={graphData} />
-                </div>
-              ) : (
-                /* ========================================================== */
-                /* INVESTIGATED STATE: FULL COMPLETED BENCHMARK REPORT        */
-                /* ========================================================== */
-                <>
-                  {/* Case Header Banner */}
-                  <div className="glass-panel" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <h2 style={{ fontSize: '24px', fontWeight: 700 }}>
-                            {caseDetail.case_id}
-                          </h2>
-                          <span className={`badge ${caseDetail.case.verdict === 'fraud' ? 'badge-fraud' : 'badge-legit'}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
-                            {caseDetail.case.verdict}
-                          </span>
-                          <span className="badge badge-auto" style={{ fontSize: '11px' }}>
-                            {caseDetail.case.status}
-                          </span>
-                          {caseDetail.sar.file && (
-                            <span className="badge badge-L2" style={{ fontSize: '11px' }}>
-                              SAR Required
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ fontSize: '14px', color: '#cbd5e1', marginTop: '8px', maxWidth: '850px', lineHeight: 1.5 }}>
-                          {caseDetail.case.summary}
-                        </p>
+                    {/* Bottom Row: Trigger Quote & CTA Button */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', borderTop: '1.5px solid var(--border-subtle)', paddingTop: '14px' }}>
+                      <div style={{ fontSize: '13px', color: '#475569', fontStyle: 'italic', fontWeight: 500, flex: 1 }}>
+                        "{c.trigger_text || c.summary}"
                       </div>
 
                       <button 
-                        onClick={handleInvestigate} 
-                        disabled={isInvestigating}
-                        className="btn-primary"
+                        className="btn-secondary"
+                        style={{ padding: '7px 16px', fontSize: '12px' }}
                       >
-                        {isInvestigating ? <RefreshCw size={15} className="spin" /> : <Play size={15} />}
-                        {isInvestigating ? "Reasoning with Graph..." : "Live Re-Investigate"}
+                        <span>Open Complete Investigation</span>
+                        <ArrowRight size={14} />
                       </button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* ================================================================ */
+          /* TRANSACTION DETAIL PAGE: COMPLETE DEDICATED WORKSPACE FOR ALERT  */
+          /* ================================================================ */
+          <div className="main-content-flow">
+            {caseDetail && (
+              <>
+                {/* Navigation Action Bar: Back Button, Breadcrumb & Prev/Next */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
+                  <button 
+                    onClick={backToTransactionList}
+                    className="btn-secondary"
+                    style={{ padding: '9px 18px', fontSize: '13px' }}
+                  >
+                    <ArrowLeft size={15} />
+                    <span>Back to All Transactions</span>
+                    <span style={{ fontSize: '11px', color: '#94A3B8', marginLeft: '4px' }}>(Esc)</span>
+                  </button>
 
-                    {/* Score vs Probability Comparison */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #1e293b' }}>
-                      <div style={{ padding: '12px 14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Assessed Fraud Probability</div>
-                        <div className="mono" style={{ fontSize: '20px', fontWeight: 800, color: caseDetail.case.fraud_probability > 0.7 ? '#f87171' : '#34d399', marginTop: '4px' }}>
-                          {caseDetail.case.fraud_probability !== null ? `${(caseDetail.case.fraud_probability * 100).toFixed(0)}%` : 'Pending'}
-                        </div>
+                  {/* Breadcrumb info */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#64748B', fontWeight: 600 }}>
+                    <span style={{ cursor: 'pointer' }} onClick={backToTransactionList}>Transactions</span>
+                    <span>/</span>
+                    <span className="mono" style={{ fontWeight: 800, color: '#0F172A' }}>{caseDetail.case_id}</span>
+                    <span>/</span>
+                    <span className="mono" style={{ color: '#334155' }}>Txn #{caseDetail.flagged_txn_id}</span>
+                  </div>
+
+                  {/* Prev / Next Alert Controls */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                      onClick={() => navigateCase(-1)}
+                      className="btn-secondary"
+                      style={{ padding: '8px 14px', fontSize: '12px' }}
+                      title="Previous Transaction Alert"
+                    >
+                      <ChevronLeft size={14} />
+                      <span>Prev</span>
+                    </button>
+                    <button 
+                      onClick={() => navigateCase(1)}
+                      className="btn-secondary"
+                      style={{ padding: '8px 14px', fontSize: '12px' }}
+                      title="Next Transaction Alert"
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Case Dossier Hero Banner */}
+                <div className="glass-panel" style={{ padding: '32px 36px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+                    <div style={{ maxWidth: '800px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                        <span className="mono" style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', background: '#F1F5F9', padding: '4px 10px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                          {caseDetail.case_id}
+                        </span>
+
+                        {!isCurrentInvestigated ? (
+                          <span className="badge badge-pending">Awaiting Investigation</span>
+                        ) : caseDetail.case?.verdict === 'fraud' ? (
+                          <span className="badge badge-fraud">Confirmed Fraud</span>
+                        ) : (
+                          <span className="badge badge-legit">Cleared Legitimate</span>
+                        )}
+
+                        <span className="badge badge-auto">
+                          {caseDetail.trigger_type === 'customer_report' ? 'Customer Report' : 
+                           caseDetail.trigger_type === 'analyst_request' ? 'Analyst Syndicate Request' : 'Real-Time Model Score'}
+                        </span>
+
+                        {caseDetail.sar?.file && (
+                          <span className="badge badge-L2">FinCEN SAR Required</span>
+                        )}
                       </div>
 
-                      <div style={{ padding: '12px 14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Financial Exposure</div>
-                        <div className="mono" style={{ fontSize: '20px', fontWeight: 800, color: '#f8fafc', marginTop: '4px' }}>
-                          ${caseDetail.case.exposure_usd?.toFixed(2)} USD
-                        </div>
-                      </div>
+                      <h2 style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.25 }}>
+                        {isCurrentInvestigated 
+                          ? (caseDetail.case?.pattern ? caseDetail.case.pattern.replace(/_/g, ' ') : 'Legitimate Cardholder Activity')
+                          : 'Real-Time Fraud Detection & Incident Response'}
+                      </h2>
 
-                      <div style={{ padding: '12px 14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Typology Pattern</div>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#60a5fa', textTransform: 'capitalize', marginTop: '6px' }}>
-                          {caseDetail.case.pattern ? caseDetail.case.pattern.replace(/_/g, ' ') : 'Legitimate'}
-                        </div>
-                      </div>
+                      <p style={{ fontSize: '14px', color: '#475569', marginTop: '8px', lineHeight: 1.6, fontWeight: 500 }}>
+                        {isCurrentInvestigated ? caseDetail.case?.summary : 'Automated investigation workflow powered by TigerGraph GraphRAG, temporal card windows, shared device rings, and Bank Policy v1.0.'}
+                      </p>
 
-                      <div style={{ padding: '12px 14px', background: '#090f1d', border: '1px solid #1e293b', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Agent Execution</div>
-                        <div className="mono" style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '6px' }}>
-                          {caseDetail.tool_calls} Graph Queries • {caseDetail.latency_s}s
+                      {/* Incoming Trigger Callout Box */}
+                      <div style={{ 
+                        background: '#F8FAFC', 
+                        border: '1.5px solid var(--border-subtle)', 
+                        borderLeft: '4px solid #0F172A',
+                        borderRadius: '10px', 
+                        padding: '16px 20px', 
+                        marginTop: '18px'
+                      }}>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#64748B', fontWeight: 800, letterSpacing: '0.05em' }}>
+                          Incoming Alert Trigger Signal
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#0F172A', marginTop: '4px', lineHeight: 1.5, fontStyle: 'italic', fontWeight: 600 }}>
+                          "{caseDetail.trigger_text || caseDetail.case?.summary}"
                         </div>
                       </div>
+                    </div>
+
+                    {/* Investigation Action Button */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', minWidth: '240px' }}>
+                      <button 
+                        onClick={handleInvestigate} 
+                        disabled={isInvestigating}
+                        className="btn-primary-large"
+                        style={{ width: '100%', justifyContent: 'center' }}
+                      >
+                        {isInvestigating ? <RefreshCw size={16} className="spin" /> : <Play size={16} fill="#ffffff" />}
+                        {isInvestigating ? "Reasoning with Graph..." : (isCurrentInvestigated ? "Re-Investigate Case" : "Run Agent Investigation")}
+                      </button>
+                      <span style={{ fontSize: '11px', color: '#64748B', textAlign: 'center', width: '100%', fontWeight: 600 }}>
+                        Graph traversal, evidence gathering & policy rules
+                      </span>
                     </div>
                   </div>
 
-                  {/* Interactive Graph Network Canvas */}
+                  {/* Live Execution Progress Bar */}
+                  {isInvestigating && (
+                    <div style={{ 
+                      marginTop: '20px', 
+                      padding: '14px 18px', 
+                      background: '#EFF6FF', 
+                      border: '1.5px solid #93C5FD', 
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <RefreshCw size={18} className="spin" color="#1D4ED8" />
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1E40AF' }}>
+                          {investigationStep || 'Agent actively querying graph and evaluating Bank Fraud Policy v1.0...'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#2563EB', marginTop: '2px', fontWeight: 600 }}>
+                          Traversing Customer, Card, DeviceProfile, and Historical Case Precedents.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Flagged Transaction Parameters Grid */}
+                  <div style={{ marginTop: '26px', paddingTop: '22px', borderTop: '1.5px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CreditCard size={14} color="#0F172A" />
+                      Flagged Transaction Parameters
+                    </div>
+
+                    <div className="param-grid">
+                      <div className="param-item">
+                        <span className="param-label">Transaction ID</span>
+                        <span className="param-value mono">#{caseDetail.flagged_txn_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Amount</span>
+                        <span className="param-value mono">${caseDetail.case?.exposure_usd?.toFixed(2)} USD</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Channel</span>
+                        <span className="param-value" style={{ textTransform: 'capitalize', color: caseDetail.flagged_txn?.channel === 'online' ? '#0284C7' : '#15803D' }}>
+                          {caseDetail.flagged_txn?.channel ? caseDetail.flagged_txn.channel.replace('_', ' ') : 'Online'}
+                        </span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Card Account</span>
+                        <span className="param-value mono">{caseDetail.card_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Customer ID</span>
+                        <span className="param-value mono">{caseDetail.customer_id}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Billing Region</span>
+                        <span className="param-value mono">{caseDetail.flagged_txn?.addr1 || 'Unspecified'}</span>
+                      </div>
+
+                      <div className="param-item">
+                        <span className="param-label">Model Risk Score</span>
+                        <span className="param-value mono" style={{ color: caseDetail.risk_score && caseDetail.risk_score > 0.7 ? '#DC2626' : '#0F172A' }}>
+                          {caseDetail.risk_score ? caseDetail.risk_score.toFixed(2) : 'Dispute Ref'}
+                        </span>
+                      </div>
+
+                      {isCurrentInvestigated && (
+                        <div className="param-item">
+                          <span className="param-label">Assessed Probability</span>
+                          <span className="param-value mono" style={{ color: caseDetail.case?.fraud_probability > 0.7 ? '#DC2626' : '#15803D' }}>
+                            {(caseDetail.case?.fraud_probability * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ============================================================== */}
+                {/* INVESTIGATION EXECUTION CHAIN: PROGRESSION THROUGH ENTITIES    */}
+                {/* ============================================================== */}
+                <InvestigationExecutionChain 
+                  caseDetail={caseDetail} 
+                  isInvestigating={isInvestigating} 
+                />
+
+                {/* ============================================================== */}
+                {/* INTERACTIVE KNOWLEDGE SUBGRAPH: ALWAYS ACTIVE & PERSISTENT    */}
+                {/* ============================================================== */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em', margin: 0 }}>
+                        Investigation Knowledge Subgraph
+                      </h3>
+                      <span className="badge badge-auto" style={{ fontWeight: 800 }}>TigerGraph Interactive Canvas</span>
+                    </div>
+                    <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
+                      Hover over any node to preview details • Drag nodes or scroll to zoom
+                    </span>
+                  </div>
+
+                  {/* Interactive Subgraph Canvas */}
                   <GraphCanvas graphData={graphData} />
+                </div>
 
-                  {/* Adaptive Next-Best Actions Timeline */}
-                  <NextBestActionTimeline 
-                    nba={caseDetail.next_best_actions}
-                    evidenceRequests={caseDetail.evidence_requests}
-                  />
+                {/* Post-Investigation Dossier Sections */}
+                {isCurrentInvestigated ? (
+                  <>
+                    {/* Adaptive Next-Best Actions Timeline */}
+                    <NextBestActionTimeline 
+                      nba={caseDetail.next_best_actions}
+                      evidenceRequests={caseDetail.evidence_requests}
+                    />
 
-                  {/* Supporting Evidence Drawer */}
-                  <EvidenceList evidence={caseDetail.case.evidence} />
+                    {/* Supporting Evidence Drawer */}
+                    <EvidenceList evidence={caseDetail.case?.evidence} />
 
-                  {/* FinCEN Suspicious Activity Report Viewer */}
-                  <SarViewer sar={caseDetail.sar} caseId={caseDetail.case_id} />
+                    {/* FinCEN Suspicious Activity Report (SAR) */}
+                    <SarViewer sar={caseDetail.sar} caseId={caseDetail.case_id} />
 
-                  {/* Historical Precedent Memory */}
-                  <CaseMemoryCard 
-                    similarCases={caseDetail.case.similar_prior_cases}
-                    writtenToGraph={caseDetail.case.written_to_graph}
-                    graphCaseId={caseDetail.case.graph_case_id}
-                  />
-                </>
-              )}
-            </>
-          )}
-        </main>
+                    {/* Historical Precedent Case Memory */}
+                    <CaseMemoryCard 
+                      similarCases={caseDetail.case?.similar_prior_cases}
+                      writtenToGraph={caseDetail.case?.written_to_graph}
+                      graphCaseId={caseDetail.case?.graph_case_id}
+                    />
+                  </>
+                ) : (
+                  /* Pre-Investigation Traversal Strategy */
+                  <div className="glass-panel" style={{ padding: '26px 30px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A' }}>
+                        Graph Traversal & Policy Reasoning Pipeline
+                      </h3>
+                      <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
+                        Run investigation to execute all 4 phases across TigerGraph
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                      <div className="glass-panel card-tint-sky" style={{ padding: '18px', border: '1.5px solid #BAE6FD' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            1. Card Window Traversal
+                          </span>
+                          <span className="badge badge-auto" style={{ fontSize: '9px', fontWeight: 800 }}>Step 1</span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#475569', marginTop: '8px', lineHeight: 1.5, fontWeight: 500 }}>
+                          Traverse ±48h window on card {caseDetail.card_id} to discover card-testing bursts or rapid authorizations.
+                        </p>
+                      </div>
+
+                      <div className="glass-panel card-tint-amber" style={{ padding: '18px', border: '1.5px solid #FDE68A' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            2. Shared Device Ring
+                          </span>
+                          <span className="badge badge-uncertain" style={{ fontSize: '9px', fontWeight: 800 }}>Step 2</span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#475569', marginTop: '8px', lineHeight: 1.5, fontWeight: 500 }}>
+                          Trace hardware fingerprint to identify other cards transacting through the same device profile.
+                        </p>
+                      </div>
+
+                      <div className="glass-panel card-tint-emerald" style={{ padding: '18px', border: '1.5px solid #A7F3D0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            3. Case Memory Lookup
+                          </span>
+                          <span className="badge badge-legit" style={{ fontSize: '9px', fontWeight: 800 }}>Step 3</span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#475569', marginTop: '8px', lineHeight: 1.5, fontWeight: 500 }}>
+                          Search 5,565 closed historical cases in graph memory for matching fraud typologies and established outcomes.
+                        </p>
+                      </div>
+
+                      <div className="glass-panel card-tint-purple" style={{ padding: '18px', border: '1.5px solid #E9D5FF' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            4. Bank Policy & SAR
+                          </span>
+                          <span className="badge badge-L2" style={{ fontSize: '9px', fontWeight: 800 }}>Step 4</span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#475569', marginTop: '8px', lineHeight: 1.5, fontWeight: 500 }}>
+                          Evaluate Rules R1–R10, calculate two-stage actions, and generate regulatory FinCEN SAR narrative.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
