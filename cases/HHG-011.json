@@ -1,0 +1,154 @@
+{
+  "case_id": "HHG-011",
+  "case": {
+    "status": "closed_fraud",
+    "verdict": "fraud",
+    "fraud_probability": 0.95,
+    "pattern": "card_testing",
+    "pattern_description": "",
+    "affected_txn_ids": [
+      "3578496",
+      "3578997",
+      "3582142",
+      "3582175",
+      "3582178"
+    ],
+    "first_suspicious_txn_id": "3578496",
+    "connected_card_ids": [
+      "C05678-K1",
+      "C05595-K1",
+      "C03938-K1"
+    ],
+    "connected_device_profiles": [
+      "SM-G610F Build/NRD90M | Unknown | chrome 66.0 for android | Unknown"
+    ],
+    "exposure_usd": 67.91,
+    "evidence": [
+      {
+        "claim": "4 online authorizations under $5 followed by larger purchase of $131.30",
+        "source": "graph",
+        "ref": "query:card_window(card_id=C11923-K2, hours=2)",
+        "entity_ids": [
+          "3578496",
+          "3578997",
+          "3582142",
+          "3582175",
+          "3582178"
+        ]
+      },
+      {
+        "claim": "Historical precedent retrieved from case memory with consistent typology and outcome",
+        "source": "graph",
+        "ref": "query:find_similar_cases(pattern=card_testing)",
+        "entity_ids": [
+          "CC-4940",
+          "CC-0290"
+        ]
+      },
+      {
+        "claim": "Response to customer validation: Customer states they did not make this transaction, remains in possession of the card, and requests card protection.",
+        "source": "customer",
+        "ref": "evidence_request:1",
+        "entity_ids": []
+      }
+    ],
+    "similar_prior_cases": [
+      "CC-4940",
+      "CC-0290"
+    ],
+    "summary": "Investigation confirmed card testing on card C11923-K2 (exposure: $67.91). Shared device profile identified across 3 additional card account(s). Defensive action executed with card block and case recorded into TigerGraph memory.",
+    "written_to_graph": true,
+    "graph_case_id": "CASE-2016-011"
+  },
+  "evidence_requests": [
+    {
+      "type": "customer_validation",
+      "asked_after_step": 3,
+      "assumed_response": "Customer states they did not make this transaction, remains in possession of the card, and requests card protection."
+    }
+  ],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "DECLINE_TRANSACTION",
+        "title": "Decline Transaction at Gateway",
+        "plain_english": "Prevent authorization of the flagged charge ($67.91) before merchant settlement, protecting account balances.",
+        "route": "L1",
+        "route_label": "Level 1 Fraud Specialist Approval",
+        "reason": "R5: testing sequence observed on card"
+      },
+      {
+        "action": "VERIFY_WITH_CUSTOMER",
+        "title": "Contact Cardholder for Authorization",
+        "plain_english": "Send an urgent two-way SMS and mobile banking push notification to verify whether the cardholder authorized this purchase before taking permanent action.",
+        "route": "auto",
+        "route_label": "Instant Automated Action",
+        "reason": "R1: verify transaction sequence with cardholder before blocking card"
+      }
+    ],
+    "final": [
+      {
+        "action": "BLOCK_CARD",
+        "title": "Deactivate Compromised Card",
+        "plain_english": "Immediately deactivate card C11923-K2 to block further unauthorized purchases by criminals, and dispatch an expedited replacement card to the cardholder.",
+        "route": "L1",
+        "route_label": "Level 1 Fraud Specialist Approval",
+        "reason": "R2: confirmed unauthorized activity; exposure $67.91 is under $2,500"
+      },
+      {
+        "action": "CREATE_CASE",
+        "title": "Open Formal Fraud Investigation Case",
+        "plain_english": "Generate a permanent internal fraud incident record linking the TigerGraph transaction trail for chargeback recovery and merchant dispute.",
+        "route": "auto",
+        "route_label": "Instant Automated Action",
+        "reason": "R2: internal case record created with graph evidence attached"
+      },
+      {
+        "action": "FILE_REPORT",
+        "title": "File FinCEN Suspicious Activity Report (SAR)",
+        "plain_english": "Submit an electronic regulatory compliance filing (SAR) to FinCEN due to financial exposure ($67.91) or organized syndicate activity.",
+        "route": "L2",
+        "route_label": "Level 2 Senior Compliance Officer Approval",
+        "reason": "R6: shared device/network links to other cards"
+      },
+      {
+        "action": "MONITOR_CONNECTED_CARDS",
+        "title": "Place Connected Cards on Heightened Surveillance",
+        "plain_english": "Flag other card accounts associated with this shared device signature for enhanced real-time fraud monitoring.",
+        "route": "auto",
+        "route_label": "Instant Automated Action",
+        "reason": "R6: device profile also observed on 3 connected card(s)"
+      }
+    ],
+    "what_changed": "Customer response confirmed unauthorized activity, raising fraud probability to 0.95 and escalating recommendations to BLOCK_CARD and CREATE_CASE. Regulatory reporting (FILE_REPORT) triggered under policy thresholds."
+  },
+  "plain_english_report": {
+    "headline": "Confirmed Card Testing Attack on Card C11923-K2",
+    "trigger_summary": "Cardholder C11923 contacted customer support disputing an unrecognized charge of $67.91 (Txn #3583368), stating they did not recognize or make it.",
+    "graph_findings": "TigerGraph temporal traversal detected a rapid sequence of micro-authorizations under $5 right before this larger purchase, a classic signature of fraudsters probing active card numbers.",
+    "customer_outcome": "During verification, the response recorded: 'Customer states they did not make this transaction, remains in possession of the card, and requests card protection.'",
+    "conclusion": "The evidence confirms card C11923-K2 has been compromised. Total financial exposure is $67.91. The card has been blocked to prevent further fraud, and an internal dispute file has been created. A mandatory Suspicious Activity Report (SAR) has been generated for FinCEN regulatory compliance."
+  },
+  "sar": {
+    "file": true,
+    "reason": "R6: Confirmed unauthorized transaction exceeding regulatory and policy filing criteria",
+    "narrative": "This Suspicious Activity Report is filed regarding unauthorized card transactions on account of customer C11923. Between 2016-12-29 and 2016-12-29, primary card C11923-K2 exhibited 1 suspicious transaction(s) totaling $67.91 USD conducted via the online channel. The flagged activity aligns with the typology of card testing. The transaction pattern exhibited repeated low-value online authorizations under $5 followed by larger purchase attempts, indicative of automated card verification. Identified device profile (SM-G610F Build/NRD90M | Unknown | chrome 66.0 for android | Unknown) was observed linking across multiple customer cards, indicating syndicated or coordinated fraud operation. Coordinated activity directly connects to additional compromised card identifiers: C05678-K1, C05595-K1, C03938-K1. Investigative follow-up: Customer states they did not make this transaction, remains in possession of the card, and requests card protection. Total exposure of confirmed fraudulent transactions is quantified at $67.91 USD. In accordance with institutional security policy and BSA/AML requirements, the affected card has been blocked and designated for reissue. Connected accounts have been placed under heightened surveillance to mitigate further financial exposure.",
+    "subjects": [
+      "C11923",
+      "C11923-K2",
+      "C05678-K1",
+      "C05595-K1",
+      "C03938-K1",
+      "SM-G610F Build/NRD90M | Unknown | chrome 66.0 for android | Unknown"
+    ],
+    "total_amount_usd": 67.91,
+    "activity_dates": [
+      "2016-12-29",
+      "2016-12-29"
+    ]
+  },
+  "stop_reason": "Customer denial and graph evidence confirmed compromise; appropriate block, case, and protective actions taken.",
+  "tool_calls": 5,
+  "tokens": 2936,
+  "latency_s": 0.42
+}

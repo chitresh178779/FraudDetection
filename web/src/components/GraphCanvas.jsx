@@ -609,14 +609,8 @@ export default function GraphCanvas({ graphData }) {
     isDraggingCanvasRef.current = false;
   };
 
-  // Mouse Wheel Zoom
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88;
-    setScale(prev => Math.min(2.8, Math.max(0.45, prev * zoomFactor)));
-  };
+  // Zoom Button Handlers (Mouse wheel zoom disabled so page scrolling does not change graph size)
 
-  // Zoom Button Handlers
   const handleZoomIn = () => setScale(prev => Math.min(2.8, prev * 1.25));
   const handleZoomOut = () => setScale(prev => Math.max(0.45, prev * 0.8));
   const handleResetZoom = () => {
@@ -783,7 +777,7 @@ export default function GraphCanvas({ graphData }) {
         pointerEvents: 'none'
       }}>
         <Info size={13} color="#2563EB" />
-        <span>Directed semantic relationships • Drag nodes to reposition • Scroll to zoom • Hover for details</span>
+        <span>Directed semantic relationships • Drag nodes to reposition • Zoom buttons (+/-) • Hover for details</span>
       </div>
 
       {/* Floating Node Hover Preview Card */}
@@ -853,7 +847,6 @@ export default function GraphCanvas({ graphData }) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         style={{ 
           width: '100%', 
           height: '100%', 

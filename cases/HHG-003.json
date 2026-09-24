@@ -1,26 +1,34 @@
 {
-  "case_id": "HHG-002",
+  "case_id": "HHG-003",
   "case": {
     "status": "closed_fraud",
     "verdict": "fraud",
-    "fraud_probability": 0.91,
-    "pattern": "card_not_present_fraud",
+    "fraud_probability": 0.85,
+    "pattern": "out_of_region_use",
     "pattern_description": "",
     "affected_txn_ids": [
-      "3478782"
+      "3530164"
     ],
-    "first_suspicious_txn_id": "3478782",
+    "first_suspicious_txn_id": "3530164",
     "connected_card_ids": [],
     "connected_device_profiles": [],
-    "exposure_usd": 292.36,
+    "exposure_usd": 49.0,
     "evidence": [
+      {
+        "claim": "Customer explicitly reported unrecognized transaction: 'Customer C08623 message: 'I never made this $49.00 purchase. Please check my card.' Refers to 3530164.'",
+        "source": "customer",
+        "ref": "customer_report:HHG-003",
+        "entity_ids": [
+          "3530164"
+        ]
+      },
       {
         "claim": "Historical precedent retrieved from case memory with consistent typology and outcome",
         "source": "graph",
-        "ref": "query:find_similar_cases(pattern=card_not_present_fraud)",
+        "ref": "query:find_similar_cases(pattern=out_of_region_use)",
         "entity_ids": [
-          "CC-5202",
-          "CC-5484"
+          "CC-5427",
+          "CC-0742"
         ]
       },
       {
@@ -31,47 +39,39 @@
       }
     ],
     "similar_prior_cases": [
-      "CC-5202",
-      "CC-5484"
+      "CC-5427",
+      "CC-0742"
     ],
-    "summary": "Investigation confirmed card not present fraud on card C11891-K1 (exposure: $292.36). Defensive action executed with card block and case recorded into TigerGraph memory.",
+    "summary": "Investigation confirmed out of region use on card C08623-K2 (exposure: $49.00). Defensive action executed with card block and case recorded into TigerGraph memory.",
     "written_to_graph": true,
-    "graph_case_id": "CASE-2016-002"
+    "graph_case_id": "CASE-2016-003"
   },
   "evidence_requests": [
     {
       "type": "customer_validation",
-      "asked_after_step": 2,
+      "asked_after_step": 3,
       "assumed_response": "Customer states they did not make this transaction, remains in possession of the card, and requests card protection."
     }
   ],
   "next_best_actions": {
     "initial": [
       {
-        "action": "DECLINE_TRANSACTION",
-        "title": "Decline Transaction at Gateway",
-        "plain_english": "Prevent authorization of the flagged charge ($292.36) before merchant settlement, protecting account balances.",
-        "route": "L1",
-        "route_label": "Level 1 Fraud Specialist Approval",
-        "reason": "R1: high risk score, decline authorization pending verification"
-      },
-      {
         "action": "VERIFY_WITH_CUSTOMER",
         "title": "Contact Cardholder for Authorization",
         "plain_english": "Send an urgent two-way SMS and mobile banking push notification to verify whether the cardholder authorized this purchase before taking permanent action.",
         "route": "auto",
         "route_label": "Instant Automated Action",
-        "reason": "R1: confirm unauthorized use before permanent block"
+        "reason": "R1: out-of-region card-present activity, confirm travel before blocking"
       }
     ],
     "final": [
       {
         "action": "BLOCK_CARD",
         "title": "Deactivate Compromised Card",
-        "plain_english": "Immediately deactivate card C11891-K1 to block further unauthorized purchases by criminals, and dispatch an expedited replacement card to the cardholder.",
+        "plain_english": "Immediately deactivate card C08623-K2 to block further unauthorized purchases by criminals, and dispatch an expedited replacement card to the cardholder.",
         "route": "L1",
         "route_label": "Level 1 Fraud Specialist Approval",
-        "reason": "R2: confirmed unauthorized activity; exposure $292.36 is under $2,500"
+        "reason": "R2: confirmed unauthorized activity; exposure $49.00 is under $2,500"
       },
       {
         "action": "CREATE_CASE",
@@ -82,14 +82,14 @@
         "reason": "R2: internal case record created with graph evidence attached"
       }
     ],
-    "what_changed": "Customer response confirmed unauthorized activity, raising fraud probability to 0.91 and escalating recommendations to BLOCK_CARD and CREATE_CASE."
+    "what_changed": "Customer response confirmed unauthorized activity, raising fraud probability to 0.85 and escalating recommendations to BLOCK_CARD and CREATE_CASE."
   },
   "plain_english_report": {
-    "headline": "Confirmed Fraud: Unauthorized Card-Not-Present Charge ($292.36)",
-    "trigger_summary": "The bank's real-time risk engine automatically flagged transaction #3478782 ($292.36) on card C11891-K1 with an elevated risk alert requiring verification.",
-    "graph_findings": "Online transaction analysis confirmed the purchase originated from an unrecognized device profile with no prior relationship to this customer account.",
+    "headline": "Confirmed Unauthorized In-Person Card Compromise",
+    "trigger_summary": "Cardholder C08623 contacted customer support disputing an unrecognized charge of $49.00 (Txn #3530164), stating they did not recognize or make it.",
+    "graph_findings": "Geographic deviation analysis showed this in-person transaction occurred in a billing region completely outside the cardholder's historical living and spending area.",
     "customer_outcome": "During verification, the response recorded: 'Customer states they did not make this transaction, remains in possession of the card, and requests card protection.'",
-    "conclusion": "The evidence confirms card C11891-K1 has been compromised. Total financial exposure is $292.36. The card has been blocked to prevent further fraud, and an internal dispute file has been created."
+    "conclusion": "The evidence confirms card C08623-K2 has been compromised. Total financial exposure is $49.00. The card has been blocked to prevent further fraud, and an internal dispute file has been created."
   },
   "sar": {
     "file": false,
@@ -101,6 +101,6 @@
   },
   "stop_reason": "Customer denial and graph evidence confirmed compromise; appropriate block, case, and protective actions taken.",
   "tool_calls": 5,
-  "tokens": 2239,
-  "latency_s": 0.01
+  "tokens": 2213,
+  "latency_s": 0.18
 }

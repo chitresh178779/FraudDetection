@@ -771,7 +771,7 @@ export default function App() {
                       <span className="badge badge-auto" style={{ fontWeight: 800 }}>TigerGraph Interactive Canvas</span>
                     </div>
                     <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
-                      Hover over any node to preview details • Drag nodes or scroll to zoom
+                      Hover over any node to preview details • Drag nodes or use zoom controls (+/-)
                     </span>
                   </div>
 
